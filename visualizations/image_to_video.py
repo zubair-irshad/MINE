@@ -14,6 +14,8 @@ from tqdm import tqdm
 from moviepy.editor import ImageSequenceClip
 from torch.utils.tensorboard import SummaryWriter
 
+import sys
+sys.path.append('/home/ubuntu/MINE')
 from synthesis_task import SynthesisTask
 from operations import mpi_rendering
 from torch.utils.data import DataLoader
@@ -163,7 +165,7 @@ class VideoGenerator:
             traj_config["z_shift_range"] = [-1.5, -1.0]
             traj_config["traj_types"] = ['double-straight-line', 'circle']
             traj_config["name"] = ['zoom-in', 'swing']
-        elif self.config["data.name"] in ["nyu", "ibims", "realestate10k"]:
+        elif self.config["data.name"] in ["nyu", "ibims", "realestate10k", "llff", "objectron", "nocs_llff"]:
             traj_config["fps"] = 30
             traj_config["num_frames"] = 90
             traj_config["x_shift_range"] = [0.0, -0.16]

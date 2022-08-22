@@ -2,7 +2,7 @@ import torch
 
 from operations.homography_sampler import HomographySample
 from operations.rendering_utils import transform_G_xyz, sample_pdf, gather_pixel_by_pxpy
-
+import torch.nn as nn
 
 def render(rgb_BS3HW, sigma_BS1HW, xyz_BS3HW, use_alpha=False, is_bg_depth_inf=False):
     if not use_alpha:
@@ -267,5 +267,10 @@ def predict_mpi_coarse_to_fine(mpi_predictor, src_imgs, xyz_src_BS3HW_coarse,
         mpi_all_src_list = mpi_predictor(src_imgs, disparity_all_src)  # BxS_coarsex4xHxW
         return mpi_all_src_list, disparity_all_src
     else:
+        #here pad images before sending it to MPI NN only for Objectron to make it divisible by 2**7 = 128
+        # zero_pad = nn.ZeroPad2d((0, 0, 16, 16))
+        # src_imgs = zero_pad(src_imgs)
         mpi_coarse_src_list = mpi_predictor(src_imgs, disparity_coarse_src)  # BxS_coarsex4xHxW
+        # #now crop the output MPIs to make it original size for rendering
+
         return mpi_coarse_src_list, disparity_coarse_src

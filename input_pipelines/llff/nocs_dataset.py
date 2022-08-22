@@ -30,7 +30,7 @@ def _collate_fn(batch):
     return src_items, tgt_items
 
 
-class NeRFDataset(data.Dataset):
+class NOCSDataset(data.Dataset):
     def __init__(self, config, logger, root, is_validation, img_size,
                  supervision_count=5, visible_points_count=8, img_pre_downsample_ratio=7.875):
         self.logger = logger
@@ -41,6 +41,7 @@ class NeRFDataset(data.Dataset):
         self.visible_points_count = visible_points_count
         self.supervision_count = supervision_count
         self.collate_fn = _collate_fn
+        self.crop_transform = transforms.CenterCrop((384,640))
         self._init_img_transforms()
 
         # use pre_downsampled image data
@@ -66,7 +67,13 @@ class NeRFDataset(data.Dataset):
             assert len(cameras) == 1
 
             # Parse colmap results
+            count = 0
             for img_id, img_item in images.items():
+                #consider the first 50 images as a test for camera frustum
+                if count>50:
+                    continue
+                count+=1
+
                 img_path = os.path.join(scene_dir, image_folder, img_item.name)
 
                 if not os.path.exists(img_path):
@@ -77,8 +84,15 @@ class NeRFDataset(data.Dataset):
 
                 # Read image from disk and put it in RAM (for small dataset)
                 img = Image.open(img_path)
-                w, h = img.size
-                img = self.img_transforms(img)
+
+                img = self.crop_transform(img)
+                img = self.img_transforms(img) # (h, w, 3)
+                
+                # img = self.img_transforms(img)
+
+                # w, h = img.size
+
+                w, h = img.shape[2], img.shape[1]
 
                 # Gather info globally for random access via index
                 self.scene_to_indices[scene_name].add(index)
@@ -129,9 +143,14 @@ class NeRFDataset(data.Dataset):
     def __len__(self):
         return self.length
 
+    # def _init_img_transforms(self):
+    #     self.img_transforms = transforms.Compose([
+    #         transforms.Resize((self.img_h, self.img_w), interpolation=Image.BICUBIC),
+    #         transforms.ToTensor(),
+    #     ])
+
     def _init_img_transforms(self):
         self.img_transforms = transforms.Compose([
-            transforms.Resize((self.img_h, self.img_w), interpolation=Image.BICUBIC),
             transforms.ToTensor(),
         ])
 

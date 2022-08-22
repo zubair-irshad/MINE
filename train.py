@@ -10,10 +10,9 @@ import torch
 from torch.utils.data import DataLoader
 import torch.distributed as dist
 from torch.utils.tensorboard import SummaryWriter
-
+import wandb
 from synthesis_task import SynthesisTask
 from utils import run_shell_cmd
-
 
 parser = argparse.ArgumentParser(description="Training")
 parser.add_argument("--config_path", default="./params.yaml", type=str)
@@ -26,6 +25,10 @@ args = parser.parse_args()
 
 
 local_rank = int(args.local_rank)
+
+
+if args.local_rank==0:
+    wandb.init(project='MINE', sync_tensorboard=True)
 
 # Load config yaml file and pre-process params
 default_config_path = os.path.join(os.path.dirname(args.config_path), "params_default.yaml")
@@ -68,10 +71,12 @@ config["global_rank"] = global_rank
 
 def get_dataset(config, logger):
     # Init data loader
-    assert config["data.name"] in ["llff", "realestate10k", "flowers", "kitti_raw", "dtu"]
+    assert config["data.name"] in ["llff", "realestate10k", "flowers", "kitti_raw", "dtu", "objectron", "nocs_llff"]
 
     if config["data.name"] == "llff":
         from input_pipelines.llff.nerf_dataset import NeRFDataset
+        
+
         train_dataset = NeRFDataset(config,
                                     logger,
                                     root=config["data.training_set_path"],
@@ -87,6 +92,62 @@ def get_dataset(config, logger):
                                        collate_fn=train_dataset.collate_fn)
 
         val_dataset = NeRFDataset(config,
+                                  logger,
+                                  root=config["data.training_set_path"],
+                                  is_validation=True,
+                                  img_size=(config["data.img_w"], config["data.img_h"]),
+                                  supervision_count=config["data.num_tgt_views"],
+                                  visible_points_count=config["data.visible_point_count"],
+                                  img_pre_downsample_ratio=config["data.img_pre_downsample_ratio"])
+        val_data_loader = DataLoader(val_dataset, batch_size=config["data.per_gpu_batch_size"],
+                                     shuffle=False, drop_last=False, num_workers=0,
+                                     collate_fn=val_dataset.collate_fn)
+
+    elif config["data.name"] == "nocs_llff":
+        from input_pipelines.llff.nocs_dataset import NOCSDataset
+        train_dataset = NOCSDataset(config,
+                                    logger,
+                                    root=config["data.training_set_path"],
+                                    is_validation=False,
+                                    img_size=(config["data.img_w"], config["data.img_h"]),
+                                    supervision_count=config["data.num_tgt_views"],
+                                    visible_points_count=config["data.visible_point_count"],
+                                    img_pre_downsample_ratio=config["data.img_pre_downsample_ratio"])
+        train_sampler = torch.utils.data.distributed.DistributedSampler(train_dataset)
+        train_data_loader = DataLoader(train_dataset, batch_size=config["data.per_gpu_batch_size"],
+                                       drop_last=True, num_workers=0,
+                                       sampler=train_sampler,
+                                       collate_fn=train_dataset.collate_fn)
+
+        val_dataset = NOCSDataset(config,
+                                  logger,
+                                  root=config["data.training_set_path"],
+                                  is_validation=True,
+                                  img_size=(config["data.img_w"], config["data.img_h"]),
+                                  supervision_count=config["data.num_tgt_views"],
+                                  visible_points_count=config["data.visible_point_count"],
+                                  img_pre_downsample_ratio=config["data.img_pre_downsample_ratio"])
+        val_data_loader = DataLoader(val_dataset, batch_size=config["data.per_gpu_batch_size"],
+                                     shuffle=False, drop_last=False, num_workers=0,
+                                     collate_fn=val_dataset.collate_fn)
+
+    elif config["data.name"] == "objectron":
+        from input_pipelines.objectron import ObjectronMultiDataset
+        train_dataset = ObjectronMultiDataset({},
+                                    logger,
+                                    root=config["data.training_set_path"],
+                                    is_validation=False,
+                                    img_size=(config["data.img_w"], config["data.img_h"]),
+                                    supervision_count=config["data.num_tgt_views"],
+                                    visible_points_count=config["data.visible_point_count"],
+                                    img_pre_downsample_ratio=config["data.img_pre_downsample_ratio"])
+        train_sampler = torch.utils.data.distributed.DistributedSampler(train_dataset)
+        train_data_loader = DataLoader(train_dataset, batch_size=config["data.per_gpu_batch_size"],
+                                       drop_last=True, num_workers=0,
+                                       sampler=train_sampler,
+                                       collate_fn=train_dataset.collate_fn)
+
+        val_dataset = ObjectronMultiDataset({},
                                   logger,
                                   root=config["data.training_set_path"],
                                   is_validation=True,

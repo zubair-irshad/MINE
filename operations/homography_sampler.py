@@ -93,6 +93,7 @@ class HomographySample:
         R_tgt_src = R_tgt_src.to(device=src_BCHW.device)
         t_tgt_src = t_tgt_src.to(device=src_BCHW.device)
         K_src_inv = K_src_inv.to(device=src_BCHW.device)
+        # print("K_src_inv", K_src_inv)
         K_tgt = K_tgt.to(device=src_BCHW.device)
         # parameter processing ------ end ------
 
@@ -106,12 +107,20 @@ class HomographySample:
         R_tnd = R_tgt_src - torch.matmul(t_tgt_src.unsqueeze(2), n.unsqueeze(1)) / -d_src_B33
         H_tgt_src = torch.matmul(K_tgt,
                                  torch.matmul(R_tnd, K_src_inv))
+
+        # print("H_tgt_src", H_tgt_src.shape)
+        # print("===================\n\n\n\n")
         # print("d_src_B33=")
         # print(d_src_B33)
         # TODO: fix cuda inverse
         with torch.no_grad():
             H_src_tgt = inverse(H_tgt_src)
+            # print("matrices", H_tgt_src.shape)
+            # print("torch.matrix_rank(a)", torch.matrix_rank(H_tgt_src))
+            # print("torch.det(input)", torch.det(H_tgt_src))
             # H_src_tgt = torch.from_numpy(np.linalg.inv(H_tgt_src.cpu().numpy())).to(device=H_tgt_src.device, dtype=torch.float32)
+            # if (torch.isnan(H_src_tgt)).any():
+            #     raise Exception("Matrix inverse contains nan!")
 
         # create tgt image grid, and map to src
         meshgrid_tgt_homo = self.meshgrid.to(src_BCHW.device)
@@ -155,9 +164,9 @@ def rotation_test():
     rxyz = HomographySample.euler_to_rotation_matrix(30, 30, 30,
                                                      seq='xyz',
                                                      degrees=True)
-    print(rxyz)
-    print(np.dot(rx, np.dot(ry, rz)))
-    print(np.dot(rz, np.dot(ry, rx)))
+    # print(rxyz)
+    # print(np.dot(rx, np.dot(ry, rz)))
+    # print(np.dot(rz, np.dot(ry, rx)))
 
 
 if __name__ == '__main__':

@@ -44,12 +44,20 @@ echo "Extra config: $EXTRA_CONFIG"
 
 # If training with llff, pull the dataset from HDFS to local disk
 LLFF="llff"
+OBJECTRON="objectron"
+NOCS="nocs_llff"
 FLOWERS="flowers"
 KITTIRAW='kitti_raw'
 DTU="dtu"
 if [ "$DATASET" = "$LLFF" ];
 then
     DEFAULT_PARAMS="./configs/params_llff.yaml"
+elif [ "$DATASET" = "$OBJECTRON"  ];
+then
+    DEFAULT_PARAMS="./configs/params_objectron.yaml"
+elif [ "$DATASET" = "$NOCS"  ];
+then
+    DEFAULT_PARAMS="./configs/params_nocs_llff.yaml"
 elif [ "$DATASET" = "$FLOWERS"  ];
 then
     DEFAULT_PARAMS="./configs/params_flowers.yaml"

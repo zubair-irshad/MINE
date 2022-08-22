@@ -14,7 +14,8 @@ import torch.distributed as dist
 import torchvision.models as models
 import torch.utils.model_zoo as model_zoo
 
-
+# import os
+# os.environ['TORCH_EXTENSIONS_DIR'] = 'torch'
 class ResNetMultiImageInput(models.ResNet):
     """Constructs a resnet model with varying number of input images.
     Adapted from https://github.com/pytorch/vision/blob/master/torchvision/models/resnet.py
@@ -100,9 +101,13 @@ class ResnetEncoder(nn.Module):
         x = self.encoder.conv1(x)
         x = self.encoder.bn1(x)
         conv1_out = self.encoder.relu(x)
+        # print("conv1_out", conv1_out.shape)
         block1_out = self.encoder.layer1(self.encoder.maxpool(conv1_out))
+        # print("block1_out", block1_out.shape)
         block2_out = self.encoder.layer2(block1_out)
+        # print("block2_out", block1_out.shape)
         block3_out = self.encoder.layer3(block2_out)
         block4_out = self.encoder.layer4(block3_out)
+        # print("$$$$$$$$$$$$$$$$$$$$$$$$$$$$\n\n\n\n")
 
         return conv1_out, block1_out, block2_out, block3_out, block4_out

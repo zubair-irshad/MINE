@@ -23,6 +23,7 @@ from network.layers import psnr
 from operations import rendering_utils
 from operations import mpi_rendering
 from operations.homography_sampler import HomographySample
+import torch.nn.functional as F
 
 from network.monodepth2.resnet_encoder import ResnetEncoder
 from network.monodepth2.depth_decoder import DepthDecoder
@@ -67,6 +68,7 @@ class SynthesisTask():
         # Init model
         self.backbone = ResnetEncoder(num_layers=50,
                                       pretrained=config.get("model.imagenet_pretrained", True)).to(device=torch.device("cuda:0"))
+        # print("self.backbone.num_ch_enc", self.backbone.num_ch_enc)
         self.decoder = DepthDecoder(
             # Common params
             num_ch_enc=self.backbone.num_ch_enc,
@@ -131,6 +133,7 @@ class SynthesisTask():
              nn.Upsample(size=(int(H_tgt / 2), int(W_tgt / 2))),
              nn.Upsample(size=(int(H_tgt / 4), int(W_tgt / 4))),
              nn.Upsample(size=(int(H_tgt / 8), int(W_tgt / 8)))]
+        self.pad_list = [16, 8, 4, 2]
 
         self.ssim = SSIM(size_average=True).cuda()
 
@@ -221,6 +224,7 @@ class SynthesisTask():
 
     def mpi_predictor(self, src_imgs_BCHW, disparity_BS):
         # random permute the disparity
+        # print("src_imgs_BCHW", src_imgs_BCHW.shape)
         conv1_out, block1_out, block2_out, block3_out, block4_out = self.backbone(src_imgs_BCHW)
         outputs = self.decoder([conv1_out, block1_out, block2_out, block3_out, block4_out],
                                disparity_BS)
@@ -245,7 +249,7 @@ class SynthesisTask():
 
         # compute xyz for src and tgt
         # here we need to ensure mpi resolution == image resolution
-        assert mpi_all_src.size(3) == H_img_scaled, mpi_all_src.size(4) == W_img_scaled
+        # assert mpi_all_src.size(3) == H_img_scaled, mpi_all_src.size(4) == W_img_scaled
         xyz_src_BS3HW = mpi_rendering.get_src_xyz_from_plane_disparity(
             self.homography_sampler_list[scale].meshgrid,
             disparity_all_src,
@@ -255,8 +259,18 @@ class SynthesisTask():
         # compose depth_src
         # here is blend_weights means how much this plane is visible from the camera, BxSx1xHxW
         # e.g, blend_weights = 0 means it is invisible from the camera
+        # print("mpi_all_src", mpi_all_src.shape)
+        # p2d = ((0, 0, -self.pad_list[scale], -self.pad_list[scale]))
+        # # print("p2d", p2d)
+        # mpi_all_src = F.pad(mpi_all_src, p2d, "constant", 0)
         mpi_all_rgb_src = mpi_all_src[:, :, 0:3, :, :]  # BxSx3xHxW
         mpi_all_sigma_src = mpi_all_src[:, :, 3:, :, :]  # BxSx1xHxW
+
+        # print("mpi_all_rgb_src", mpi_all_rgb_src.shape, mpi_all_sigma_src.shape)
+
+        assert mpi_all_src.size(3) == H_img_scaled, mpi_all_src.size(4) == W_img_scaled
+
+        # print("mpi_all_rgb_src, mpi_all_rgb_src", mpi_all_rgb_src.shape, mpi_all_sigma_src.shape)
         src_imgs_syn, src_depth_syn, blend_weights, weights = mpi_rendering.render(
             mpi_all_rgb_src,
             mpi_all_sigma_src,
@@ -264,6 +278,7 @@ class SynthesisTask():
             use_alpha=self.config.get("mpi.use_alpha", False),
             is_bg_depth_inf=self.config.get("mpi.render_tgt_rgb_depth", False)
         )
+        # print("src_imgs_syn, src_depth_syn", src_imgs_syn.shape, src_depth_syn.shape)
         if self.config.get("training.src_rgb_blending", True):
             mpi_all_rgb_src = blend_weights * src_imgs_scaled.unsqueeze(1) + (1 - blend_weights) * mpi_all_rgb_src
             src_imgs_syn, src_depth_syn = mpi_rendering.weighted_sum_mpi(
@@ -291,6 +306,8 @@ class SynthesisTask():
         tgt_imgs_syn = render_results["tgt_imgs_syn"]
         tgt_disparity_syn = render_results["tgt_disparity_syn"]
         tgt_mask_syn = render_results["tgt_mask_syn"]
+
+        # print("tgt_imgs_syn", tgt_imgs_syn.shape, tgt_disparity_syn.shape)
 
         # build loss
         # Read lambdas
@@ -426,7 +443,10 @@ class SynthesisTask():
             S_fine,
             is_bg_depth_inf=self.config.get("mpi.render_tgt_rgb_depth", False)
         )
-
+        # for mpi_all_src in mpi_all_src_list:
+        #     print("mpi all src", mpi_all_src.shape)
+        # print("================\n\n\n")
+        # print("mpi_all_src_list", mpi_all_src_list.shape)
         return {
             "mpi_all_src_list": mpi_all_src_list,
             "disparity_all_src": disparity_all_src

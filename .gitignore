@@ -5,3 +5,12 @@ params_tmp.yaml
 debug*/
 workspace/
 *.pth
+video/*
+runs/*
+camera_v1/*
+nocs/*
+nerf_llff_data/*
+nerf_llff_data_complete/*
+camera/*
+camera_batch-16_48/*
+

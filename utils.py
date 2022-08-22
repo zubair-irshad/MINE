@@ -100,6 +100,9 @@ def inverse(matrices):
     this function keeps inversing the matrix until successful or maximum tries is reached
     :param matrices Bx3x3
     """
+    # print("matrices", matrices.shape)
+    # print("torch.matrix_rank(a)", torch.matrix_rank(matrices))
+    # print("torch.det(input)", torch.det(matrices))
     inverse = None
     max_tries = 5
     while (inverse is None) or (torch.isnan(inverse)).any():

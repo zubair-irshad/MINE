@@ -61,7 +61,6 @@ class DepthDecoder(nn.Module):
         self.conv_up2 = conv(256, final_enc_out_channels, 1, False)
 
         self.num_ch_enc = num_ch_enc
-        print("num_ch_enc=", num_ch_enc)
         self.num_ch_enc = [x + self.E for x in self.num_ch_enc]
         self.num_ch_dec = np.array([16, 32, 64, 128, 256])
         # self.num_ch_enc = np.array([64, 64, 128, 256, 512])
@@ -73,15 +72,12 @@ class DepthDecoder(nn.Module):
             num_ch_in = self.num_ch_enc[-1] if i == 4 else self.num_ch_dec[i + 1]
             num_ch_out = self.num_ch_dec[i]
             self.convs[self.tuple_to_str(("upconv", i, 0))] = ConvBlock(num_ch_in, num_ch_out)
-            print("upconv_{}_{}".format(i, 0), num_ch_in, num_ch_out)
-
             # upconv_1
             num_ch_in = self.num_ch_dec[i]
             if self.use_skips and i > 0:
                 num_ch_in += self.num_ch_enc[i - 1]
             num_ch_out = self.num_ch_dec[i]
             self.convs[self.tuple_to_str(("upconv", i, 1))] = ConvBlock(num_ch_in, num_ch_out)
-            print("upconv_{}_{}".format(i, 1), num_ch_in, num_ch_out)
 
         for s in self.scales:
             self.convs[self.tuple_to_str(("dispconv", s))] = Conv3x3(self.num_ch_dec[s], self.num_output_channels)
@@ -92,21 +88,18 @@ class DepthDecoder(nn.Module):
     def forward(self, input_features, disparity):
         B, S = disparity.size()
         disparity = self.embedder(disparity.reshape(B * S, 1)).unsqueeze(2).unsqueeze(3)
-
         # extension of encoder to increase receptive field
         encoder_out = input_features[-1]
         conv_down1 = self.conv_down1(self.downsample(encoder_out))
         conv_down2 = self.conv_down2(self.downsample(conv_down1))
         conv_up1 = self.conv_up1(self.upsample(conv_down2))
         conv_up2 = self.conv_up2(self.upsample(conv_up1))
-
         # repeat / reshape features
         _, C_feat, H_feat, W_feat = conv_up2.size()
         feat_tmp = conv_up2.unsqueeze(1).expand(B, S, C_feat, H_feat, W_feat) \
             .contiguous().view(B * S, C_feat, H_feat, W_feat)
         disparity_BsCHW = disparity.repeat(1, 1, H_feat, W_feat)
         conv_up2 = torch.cat((feat_tmp, disparity_BsCHW), dim=1)
-
         # repeat / reshape features
         for i, feat in enumerate(input_features):
             _, C_feat, H_feat, W_feat = feat.size()
